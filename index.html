@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Universidades en Buenos Aires</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+    <script src="dashboard_data_inline.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .description {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #666;
+        }
+        .chart-container {
+            margin-bottom: 40px;
+        }
+        #bar-chart,
+        #pie-chart {
+            width: 100%;
+            min-height: 500px;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+        #comuna-select {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 10px 0 15px;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        .comuna-info {
+            background-color: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .universidad-item {
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+        .universidad-item:hover {
+            background-color: #e9f0ff;
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+            border-radius: 8px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #999;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard de Universidades en Buenos Aires</h1>
+        <p class="description">
+            Este dashboard presenta un análisis visual de la distribución de universidades en la Ciudad de Buenos Aires.
+            Incluye gráficos interactivos de barras y torta, además de un mapa interactivo con la ubicación de las instituciones.
+        </p>
+
+        <div class="chart-container">
+            <h2>Gráfico de Barras: Universidades por Barrio</h2>
+            <p>Este gráfico compara la cantidad de universidades en cada barrio. Sirve para identificar dónde se concentra la oferta académica y cuáles barrios tienen mayor presencia institucional.</p>
+            <div id="bar-chart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2>Gráfico de Torta: Distribución por Comuna</h2>
+            <p>Este gráfico muestra la proporción de universidades en cada comuna. Es útil para entender la distribución territorial y qué comunas agrupan la mayor parte de las instituciones.</p>
+            <div id="pie-chart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2>Mapa Interactivo de Ubicaciones</h2>
+            <p>El mapa muestra la ubicación geográfica de cada universidad. Al hacer clic en los marcadores se puede ver el nombre, barrio y comuna de cada institución.</p>
+            <div id="map"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2>Universidades por Comuna</h2>
+            <p>Selecciona una comuna para ver qué universidades están ubicadas allí y cómo se distribuyen.</p>
+            <label for="comuna-select">Comuna:</label>
+            <select id="comuna-select"></select>
+            <div id="comuna-info" class="comuna-info"></div>
+            <div id="universidad-detalle" class="comuna-info"></div>
+        </div>
+
+        <div class="footer">
+            <p>Proyecto académico de visualización de datos - Grupo de trabajo</p>
+            <p>Fuente de datos: Dataset de universidades en Buenos Aires</p>
+        </div>
+    </div>
+
+    <script>
+        // Inicializar el mapa centrado en Buenos Aires
+        var map = L.map('map').setView([-34.6037, -58.3816], 11);
+
+        // Agregar capa de mapa base (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        var data = window.dashboardData || null;
+        if (!data) {
+            console.error('No se pudo cargar dashboardData. Asegúrese de que dashboard_data_inline.js exista y se cargue antes de este script.');
+        } else {
+            // Dibujar gráfico de barras
+            var barTrace = {
+                x: data.barrios,
+                y: data.counts_barrios,
+                type: 'bar',
+                marker: {color: 'rgb(58,123,213)'},
+                hovertemplate: '%{x}: %{y} universidades<extra></extra>'
+            };
+            var barLayout = {
+                title: 'Cantidad de Universidades por Barrio en Buenos Aires',
+                xaxis: {title: 'Barrio', tickangle: -45},
+                yaxis: {title: 'Cantidad de Universidades'},
+                margin: {t: 60, b: 150}
+            };
+            Plotly.newPlot('bar-chart', [barTrace], barLayout, {responsive: true});
+
+            // Dibujar gráfico de torta
+            var pieTrace = {
+                values: data.counts_comunas,
+                labels: data.comunas,
+                type: 'pie',
+                textinfo: 'percent+label',
+                hovertemplate: '%{label}: %{value} universidades (%{percent})<extra></extra>'
+            };
+            var pieLayout = {
+                title: 'Distribución de Universidades por Comuna en Buenos Aires',
+                margin: {t: 60}
+            };
+            Plotly.newPlot('pie-chart', [pieTrace], pieLayout, {responsive: true});
+
+            // Crear grupo de marcadores para actualizar el mapa según la comuna seleccionada
+            var marcadorGrupo = L.layerGroup().addTo(map);
+
+            // Agregar selección de comuna y lista de universidades
+            var comunaSelect = document.getElementById('comuna-select');
+            var comunaInfo = document.getElementById('comuna-info');
+            var detalleUniversidad = document.getElementById('universidad-detalle');
+
+            data.comunas.forEach(comuna => {
+                var option = document.createElement('option');
+                option.value = comuna;
+                option.textContent = comuna;
+                comunaSelect.appendChild(option);
+            });
+
+            function mostrarDetalle(universidad, marker) {
+                var contenido = `<h3>${universidad.nombre}</h3>`;
+                contenido += `<p><strong>Calle:</strong> ${universidad.dirreccion || 'No disponible'}</p>`;
+                contenido += `<p><strong>Barrio:</strong> ${universidad.barrio}</p>`;
+                contenido += `<p><strong>Comuna:</strong> ${universidad.comuna}</p>`;
+                contenido += `<p><strong>Unidad académica:</strong> ${universidad.unidad_aca || 'No disponible'}</p>`;
+                contenido += `<p><strong>Sede:</strong> ${universidad.sede || 'No disponible'}</p>`;
+                contenido += `<p><strong>Teléfono:</strong> ${universidad.telefono || 'No disponible'}</p>`;
+                contenido += `<p><strong>Web:</strong> ${universidad.web ? '<a href="' + universidad.web + '" target="_blank">' + universidad.web + '</a>' : 'No disponible'}</p>`;
+                contenido += `<p><strong>Coordenadas:</strong> ${universidad.latitud.toFixed(6)}, ${universidad.longitud.toFixed(6)}</p>`;
+                detalleUniversidad.innerHTML = contenido;
+                if (marker) {
+                    map.setView([universidad.latitud, universidad.longitud], 15);
+                    marker.openPopup();
+                }
+            }
+
+            function actualizarComuna() {
+                var comunaSeleccionada = comunaSelect.value;
+                var universidadesEnComuna = data.universidades.filter(u => u.comuna === comunaSeleccionada);
+                var contenido = `<h3>${comunaSeleccionada}</h3>`;
+                contenido += `<p>Total de universidades: <strong>${universidadesEnComuna.length}</strong></p>`;
+                if (universidadesEnComuna.length > 0) {
+                    contenido += '<ul>';
+                    marcadorGrupo.clearLayers();
+                    var bounds = [];
+                    universidadesEnComuna.forEach((universidad, index) => {
+                        var marker = L.marker([universidad.latitud, universidad.longitud]);
+                        marker.bindPopup(`
+                            <b>${universidad.nombre}</b><br>
+                            Barrio: ${universidad.barrio}<br>
+                            Comuna: ${universidad.comuna}
+                        `);
+                        marcadorGrupo.addLayer(marker);
+                        bounds.push([universidad.latitud, universidad.longitud]);
+
+                        contenido += `<li class="universidad-item" data-idx="${index}"><strong>${universidad.nombre}</strong> — Barrio: ${universidad.barrio}</li>`;
+                    });
+                    contenido += '</ul>';
+                    if (bounds.length > 0) {
+                        map.fitBounds(bounds, {padding: [50, 50]});
+                    }
+                } else {
+                    contenido += '<p>No hay universidades registradas en esta comuna.</p>';
+                    marcadorGrupo.clearLayers();
+                }
+                comunaInfo.innerHTML = contenido;
+                detalleUniversidad.innerHTML = '<p>Haz clic en una universidad para ver sus datos y ubicación.</p>';
+
+                // Vincular clic en cada universidad
+                var items = comunaInfo.querySelectorAll('.universidad-item');
+                items.forEach(item => {
+                    item.addEventListener('click', function() {
+                        var idx = Number(this.dataset.idx);
+                        var universidad = universidadesEnComuna[idx];
+                        var marker = marcadorGrupo.getLayers()[idx];
+                        mostrarDetalle(universidad, marker);
+                    });
+                });
+            }
+
+            comunaSelect.addEventListener('change', actualizarComuna);
+            actualizarComuna();
+        }
+    </script>
+</body>
+</html>
